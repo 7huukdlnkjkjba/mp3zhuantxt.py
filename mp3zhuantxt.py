@@ -1,40 +1,48 @@
-import os
 from pydub import AudioSegment
-from moviepy.editor import VideoFileClip
+import speech_recognition as sr
+import os
 
-media_path = r"D:\下载\videoplayback.m4a"  # 支持所有音频格式和常见视频格式
+media_path = r"D:\下载\为什么我说一些高举反共高呼民主自由的反贼不是真反贼这部分人对统一有执念.mp3"  # 支持mp3或mp4
 
 # 自动生成wav和txt文件名
 base, ext = os.path.splitext(media_path)
 wav_path = base + ".wav"
 txt_path = base + ".txt"
 
-# 判断是否为视频格式
-video_exts = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv']
-if ext.lower() in video_exts:
-    # 提取音频
-    audio_path = base + "_audio_tmp.mp3"
-    try:
-        clip = VideoFileClip(media_path)
-        clip.audio.write_audiofile(audio_path)
-        media_path_for_pydub = audio_path
-    except Exception as e:
-        raise ValueError(f"无法提取视频中的音频，错误信息：{e}")
+# 判断文件类型并读取音频
+if ext.lower() == ".mp3":
+    audio = AudioSegment.from_mp3(media_path)
+elif ext.lower() == ".mp4":
+    audio = AudioSegment.from_file(media_path, format="mp4")
 else:
-    media_path_for_pydub = media_path
-
-# 自动识别并读取音频（支持所有pydub支持的格式）
-try:
-    audio = AudioSegment.from_file(media_path_for_pydub)
-except Exception as e:
-    raise ValueError(f"无法读取音频文件，错误信息：{e}")
+    raise ValueError("仅支持MP3或MP4文件")
 
 audio = audio.set_channels(1).set_frame_rate(16000)
 audio.export(wav_path, format="wav")
 
-# 如果有临时音频文件，处理完后删除
-if ext.lower() in video_exts and os.path.exists(audio_path):
-    os.remove(audio_path)
+# 加载音频并识别每 60 秒一段
+recognizer = sr.Recognizer()
+with sr.AudioFile(wav_path) as source:
+    total_duration = int(audio.duration_seconds)
+    print("总时长：", total_duration, "秒")
 
-# ...existing code...
-要求:简述
+    result_text = ""
+    for i in range(0, total_duration, 60):
+        print(f"识别第 {i} 秒到 {min(i+60, total_duration)} 秒...")
+        source_audio = recognizer.record(source, duration=60)
+        try:
+            text = recognizer.recognize_google(source_audio, language='zh-CN')
+            result_text += text + "\n"
+        except Exception as e:
+            result_text += f"[第 {i} 秒识别失败：{e}]\n"
+
+# 写入文本
+with open(txt_path, "w", encoding="utf-8") as f:
+    f.write(result_text)
+
+# 删除wav文件
+if os.path.exists(wav_path):
+    os.remove(wav_path)
+    print(f"{wav_path} 已删除。")
+
+print(f"识别完成！结果已保存到 {txt_path}")
